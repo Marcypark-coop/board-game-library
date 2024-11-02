@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Marcy Park Co-op Board Game Library</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .policy-section {
+            background-color: #fff3cd;
+            border: 1px solid #ffeeba;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .game-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        .game-card {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .checkout-form {
+            margin-top: 10px;
+        }
+        .checkout-form input {
+            margin-bottom: 5px;
+            padding: 5px;
+            width: calc(100% - 10px);
+        }
+        .button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 5px;
+        }
+        .button.admin {
+            background-color: #e74c3c;
+        }
+        .button:disabled {
+            background-color: #bdc3c7;
+        }
+        .status-available {
+            color: #27ae60;
+            font-weight: bold;
+        }
+        .status-checked-out {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+        .search-bar {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .warning {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Marcy Park Co-op Board Game Library</h1>
+        <p>Browse and check out games from our collection</p>
+    </div>
+
+    <div class="policy-section">
+        <h3>📚 Checkout Policy</h3>
+        <p><strong>Checkout Period:</strong> 15 days maximum before renewal is required</p>
+        <p><strong>Late Returns:</strong></p>
+        <ul>
+            <li>A warning will be issued 1 week before the due date</li>
+            <li>If not returned by the due date, you will be fined the full cost of the board game</li>
+        </ul>
+        <p><strong>Note:</strong> All checkouts require valid building and apartment information</p>
+    </div>
+
+    <input type="text" id="searchInput" class="search-bar" placeholder="Search for games...">
+
+    <div class="game-list" id="gameList">
+    </div>
+
+    <script>
+        const ADMIN_PASSWORD = "admin123"; // In a real implementation, this would be securely stored
+        
+        let games = [
+            { id: 1, name: "Catan", players: "3-4", duration: "60-120 min", cost: 49.99, available: true, checkedOutTo: null, dueDate: null, building: null, apartment: null },
+            { id: 2, name: "Ticket to Ride", players: "2-5", duration: "30-60 min", cost: 44.99, available: true, checkedOutTo: null, dueDate: null, building: null, apartment: null },
+            { id: 3, name: "Pandemic", players: "2-4", duration: "45-60 min", cost: 39.99, available: true, checkedOutTo: null, dueDate: null, building: null, apartment: null },
+            { id: 4, name: "Carcassonne", players: "2-5", duration: "30-45 min", cost: 34.99, available: true, checkedOutTo: null, dueDate: null, building: null, apartment: null }
+        ];
+
+        function createGameCard(game) {
+            const card = document.createElement('div');
+            card.className = 'game-card';
+            
+            let daysUntilDue = 0;
+            let warningMessage = '';
+            if (game.dueDate) {
+                const due = new Date(game.dueDate);
+                const today = new Date();
+                daysUntilDue = Math.ceil((due - today) / (1000 * 60 * 60 * 24));
+                if (daysUntilDue <= 7 && daysUntilDue > 0) {
+                    warningMessage = `<p class="warning">⚠️ Warning: Due in ${daysUntilDue} days</p>`;
+                } else if (daysUntilDue <= 0) {
+                    warningMessage = `<p class="warning">⚠️ OVERDUE - Fine: $${game.cost}</p>`;
+                }
+            }
+
+            card.innerHTML = `
+                <h3>${game.name}</h3>
+                <p>Players: ${game.players}</p>
+                <p>Duration: ${game.duration}</p>
+                <p>Replacement Cost: $${game.cost}</p>
+                <p>Status: <span class="${game.available ? 'status-available' : 'status-checked-out'}">
+                    ${game.available ? 'Available' : 'Checked Out'}
+                </span></p>
+                ${game.checkedOutTo ? `
+                    <p>Checked out to: ${game.checkedOutTo}<br>
+                    Building: ${game.building}, Apt: ${game.apartment}<br>
+                    Due: ${game.dueDate}</p>
+                    ${warningMessage}
+                ` : ''}
+                <div class="checkout-form">
+                    ${game.available ? `
+                        <input type="text" id="name-${game.id}" placeholder="Your name" required>
+                        <input type="text" id="building-${game.id}" placeholder="Building number" required>
+                        <input type="text" id="apartment-${game.id}" placeholder="Apartment number" required>
+                        <button class="button" onclick="checkoutGame(${game.id})">Check Out</button>
+                    ` : `
+                        <input type="password" id="password-${game.id}" placeholder="Admin password" style="margin-bottom: 5px;">
+                        <button class="button admin" onclick="returnGame(${game.id})">Return Game (Admin Only)</button>
+                    `}
+                </div>
+            `;
+            return card;
+        }
+
+        function renderGames(gameList) {
+            const container = document.getElementById('gameList');
+            container.innerHTML = '';
+            gameList.forEach(game => {
+                container.appendChild(createGameCard(game));
+            });
+        }
+
+        function checkoutGame(gameId) {
+            const game = games.find(g => g.id === gameId);
+            const nameInput = document.getElementById(`name-${gameId}`);
+            const buildingInput = document.getElementById(`building-${gameId}`);
+            const apartmentInput = document.getElementById(`apartment-${gameId}`);
+            
+            if (!nameInput.value.trim() || !buildingInput.value.trim() || !apartmentInput.value.trim()) {
+                alert('Please fill in all fields (name, building, and apartment)');
+                return;
+            }
+
+            game.available = false;
+            game.checkedOutTo = nameInput.value;
+            game.building = buildingInput.value;
+            game.apartment = apartmentInput.value;
+            
+            const dueDate = new Date();
+            dueDate.setDate(dueDate.getDate() + 15); // 15-day checkout period
+            game.dueDate = dueDate.toLocaleDateString();
+            
+            renderGames(games);
+            alert(`Checkout successful! Due date: ${game.dueDate}`);
+        }
+
+        function returnGame(gameId) {
+            const game = games.find(g => g.id === gameId);
+            const passwordInput = document.getElementById(`password-${gameId}`);
+            
+            if (passwordInput.value !== ADMIN_PASSWORD) {
+                alert('Incorrect admin password');
+                return;
+            }
+
+            game.available = true;
+            game.checkedOutTo = null;
+            game.dueDate = null;
+            game.building = null;
+            game.apartment = null;
+            
+            renderGames(games);
+            alert('Game successfully returned');
+        }
+
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+            const searchTerm = e.target.value.toLowerCase();
+            const filteredGames = games.filter(game => 
+                game.name.toLowerCase().includes(searchTerm)
+            );
+            renderGames(filteredGames);
+        });
+
+        renderGames(games);
+    </script>
+</body>
+</html>
