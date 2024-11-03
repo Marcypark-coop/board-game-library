@@ -103,6 +103,10 @@
             background-color: #dc3545;
             color: white;
         }
+        .invalid-input {
+            border-color: #e74c3c;
+            background-color: #ffd7d7;
+        }
     </style>
 </head>
 <body>
@@ -120,7 +124,7 @@
             <li>A warning will be issued 1 week before the due date</li>
             <li>If not returned by the due date, you will be fined the full cost of the board game</li>
         </ul>
-        <p><strong>Note:</strong> All checkouts require valid building and apartment information</p>
+        <p><strong>Note:</strong> All checkouts require valid building (100 or 700) and apartment information</p>
     </div>
 
     <input type="text" id="searchInput" class="search-bar" placeholder="Search for games...">
@@ -128,25 +132,47 @@
 
     <script>
         const CONFIG = {
-            SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbyRYND2H7lcNNCjjbD9__sQ1N75Lz3e2t2oh4r0w9TX7Iv3hfm4hgPBO3M1KWqt7g75/exec',
+            SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbzccOPHK7jAqx92N7cwzmCZA-0h2DkTzVAlt-dVWkCpn7obkDY_iizYLK4Q37o-5Kd4/exec',
             ADMIN_PASSWORD: 'admin123',
-            SYNC_INTERVAL: 120000 // 1 minute
+            SYNC_INTERVAL: 120000
         };
 
-        // Initial games data
         let games = [
-            { id: 1, name: "Catan", players: "3-4", duration: "60-120 min", cost: 49.99, available: true, checkedOutTo: null, dueDate: null, building: null, apartment: null },
-            { id: 2, name: "Ticket to Ride", players: "2-5", duration: "30-60 min", cost: 44.99, available: true, checkedOutTo: null, dueDate: null, building: null, apartment: null },
-            { id: 3, name: "Pandemic", players: "2-4", duration: "45-60 min", cost: 39.99, available: true, checkedOutTo: null, dueDate: null, building: null, apartment: null },
-            { id: 4, name: "Carcassonne", players: "2-5", duration: "30-45 min", cost: 34.99, available: true, checkedOutTo: null, dueDate: null, building: null, apartment: null }
+            { id: 1, name: "Catan", players: "3-4", duration: "60-120 min", cost: 49.99, available: true, checkedOutTo: null, email: null, building: null, apartment: null, dueDate: null },
+            { id: 2, name: "Ticket to Ride", players: "2-5", duration: "30-60 min", cost: 44.99, available: true, checkedOutTo: null, email: null, building: null, apartment: null, dueDate: null },
+            { id: 3, name: "Pandemic", players: "2-4", duration: "45-60 min", cost: 39.99, available: true, checkedOutTo: null, email: null, building: null, apartment: null, dueDate: null },
+            { id: 4, name: "Carcassonne", players: "2-5", duration: "30-45 min", cost: 34.99, available: true, checkedOutTo: null, email: null, building: null, apartment: null, dueDate: null }
         ];
 
         let isLoading = false;
 
-        // Load games from localStorage if available
         const savedGames = localStorage.getItem('boardGames');
         if (savedGames) {
             games = JSON.parse(savedGames);
+        }
+
+        function validateInput(input, type) {
+            input.classList.remove('invalid-input');
+            const value = input.value.trim();
+            
+            switch(type) {
+                case 'name':
+                    return /^[A-Za-z\s]+$/.test(value);
+                case 'email':
+                    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+                case 'building':
+                    return ['100', '700'].includes(value);
+                case 'apartment':
+                    return /^\d+$/.test(value);
+                default:
+                    return false;
+            }
+        }
+
+        function markInvalid(input, message) {
+            input.classList.add('invalid-input');
+            alert(message);
+            return false;
         }
 
         async function fetchGames() {
@@ -159,11 +185,10 @@
                 const newData = JSON.parse(text);
                 
                 if (Array.isArray(newData)) {
-                    // Preserve checkout status for checked out games
                     games = newData.map(newGame => {
                         const existingGame = games.find(g => g.id === newGame.id);
                         if (existingGame && !existingGame.available) {
-                            return existingGame; // Keep existing game data if checked out
+                            return existingGame;
                         }
                         return newGame;
                     });
@@ -190,7 +215,6 @@
                     body: JSON.stringify(data)
                 });
 
-                // Save to localStorage after successful update
                 localStorage.setItem('boardGames', JSON.stringify(games));
                 return true;
             } catch (error) {
@@ -231,8 +255,9 @@
                 ` : ''}
                 <div class="checkout-form">
                     ${game.available ? `
-                        <input type="text" id="name-${game.id}" placeholder="Your name" required>
-                        <input type="text" id="building-${game.id}" placeholder="Building number" required>
+                        <input type="text" id="name-${game.id}" placeholder="Your name (letters only)" required>
+                        <input type="email" id="email-${game.id}" placeholder="Your email" required>
+                        <input type="text" id="building-${game.id}" placeholder="Building number (700 or 100)" required>
                         <input type="text" id="apartment-${game.id}" placeholder="Apartment number" required>
                         <button class="button" onclick="checkoutGame(${game.id})" ${isLoading ? 'disabled' : ''}>
                             Check Out
@@ -251,12 +276,22 @@
         async function checkoutGame(gameId) {
             const game = games.find(g => g.id === gameId);
             const nameInput = document.getElementById(`name-${gameId}`);
+            const emailInput = document.getElementById(`email-${gameId}`);
             const buildingInput = document.getElementById(`building-${gameId}`);
             const apartmentInput = document.getElementById(`apartment-${gameId}`);
             
-            if (!nameInput.value.trim() || !buildingInput.value.trim() || !apartmentInput.value.trim()) {
-                alert('Please fill in all fields');
-                return;
+            // Validate each field
+            if (!validateInput(nameInput, 'name')) {
+                return markInvalid(nameInput, 'Name must contain only letters');
+            }
+            if (!validateInput(emailInput, 'email')) {
+                return markInvalid(emailInput, 'Please enter a valid email address');
+            }
+            if (!validateInput(buildingInput, 'building')) {
+                return markInvalid(buildingInput, 'Building must be either 100 or 700');
+            }
+            if (!validateInput(apartmentInput, 'apartment')) {
+                return markInvalid(apartmentInput, 'Apartment must be a number');
             }
 
             updateSyncStatus('Updating...', true);
@@ -268,6 +303,7 @@
                 action: 'checkout',
                 gameId: game.id,
                 name: nameInput.value.trim(),
+                email: emailInput.value.trim(),
                 building: buildingInput.value.trim(),
                 apartment: apartmentInput.value.trim(),
                 dueDate: dueDateStr
@@ -276,6 +312,7 @@
             if (success) {
                 game.available = false;
                 game.checkedOutTo = nameInput.value.trim();
+                game.email = emailInput.value.trim();
                 game.building = buildingInput.value.trim();
                 game.apartment = apartmentInput.value.trim();
                 game.dueDate = dueDateStr;
@@ -308,6 +345,7 @@
             if (success) {
                 game.available = true;
                 game.checkedOutTo = null;
+                game.email = null;
                 game.building = null;
                 game.apartment = null;
                 game.dueDate = null;
@@ -340,7 +378,6 @@
             `;
         }
 
-        // Search functionality
         document.getElementById('searchInput').addEventListener('input', (e) => {
             const searchTerm = e.target.value.toLowerCase();
             const filteredGames = games.filter(game => 
@@ -349,14 +386,9 @@
             renderGames(filteredGames);
         });
 
-        // Initialize with local data first
         renderGames(games);
         updateSyncStatus('Using local data', false);
-
-        // Try initial sync after a short delay
         setTimeout(fetchGames, 1000);
-        
-        // Set up periodic sync
         setInterval(fetchGames, CONFIG.SYNC_INTERVAL);
     </script>
 </body>
