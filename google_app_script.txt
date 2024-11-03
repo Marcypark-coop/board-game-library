@@ -5,21 +5,24 @@ function doGet(e) {
     var games = [];
     
     // Skip header row
+    // New column order: name, imageUrl, players, duration, cost, available, etc.
     for (var i = 1; i < data.length; i++) {
       var row = data[i];
       if (row[0]) { // If name exists
         games.push({
           id: i,
-          name: row[0],
-          players: row[1],
-          duration: row[2],
-          cost: parseFloat(row[3]) || 0,
-          available: row[4] === 'TRUE',
-          checkedOutTo: row[5] || null,
-          email: row[6] || null,        // New email field
-          building: row[7] || null,      // Shifted from 6 to 7
-          apartment: row[8] || null,     // Shifted from 7 to 8
-          dueDate: row[9] || null        // Shifted from 8 to 9
+          name: row[0],          // Column A: Name
+          imageUrl: row[1] || null,  // Column B: Image URL
+          players: row[2],       // Column C: Players
+          duration: row[3],      // Column D: Duration
+          cost: parseFloat(row[4]) || 0,  // Column E: Cost
+          available: row[5] === 'TRUE',    // Column F: Available
+          checkedOutTo: row[6] || null,    // Column G: CheckedOutTo
+          email: row[7] || null,           // Column H: Email
+          building: row[8] || null,        // Column I: Building
+          apartment: row[9] || null,       // Column J: Apartment
+          dueDate: row[10] || null,        // Column K: DueDate
+          lastUpdated: row[11] || null     // Column L: Timestamp
         });
       }
     }
@@ -46,34 +49,41 @@ function doPost(e) {
     // Log the incoming data for debugging
     Logger.log('Received data: ' + JSON.stringify(data));
     
-    if (data.action === 'checkout') {
-      // Update the sheet for checkout
-      sheet.getRange(row, 5).setValue('FALSE'); // Available
-      sheet.getRange(row, 6).setValue(data.name); // CheckedOutTo
-      sheet.getRange(row, 7).setValue(data.email); // Email (new)
-      sheet.getRange(row, 8).setValue(data.building); // Building (shifted)
-      sheet.getRange(row, 9).setValue(data.apartment); // Apartment (shifted)
-      sheet.getRange(row, 10).setValue(data.dueDate); // DueDate (shifted)
+    if (data.action === 'updateImage') {
+      // Update image URL (Column B)
+      sheet.getRange(row, 2).setValue(data.imageUrl);
+      // Update timestamp (Column L)
+      sheet.getRange(row, 12).setValue(new Date());
       
-      // Log the update
+      Logger.log('Image URL updated for game ID: ' + data.gameId);
+    }
+    else if (data.action === 'checkout') {
+      // Update the sheet for checkout
+      sheet.getRange(row, 6).setValue('FALSE'); // Available (Column F)
+      sheet.getRange(row, 7).setValue(data.name); // CheckedOutTo (Column G)
+      sheet.getRange(row, 8).setValue(data.email); // Email (Column H)
+      sheet.getRange(row, 9).setValue(data.building); // Building (Column I)
+      sheet.getRange(row, 10).setValue(data.apartment); // Apartment (Column J)
+      sheet.getRange(row, 11).setValue(data.dueDate); // DueDate (Column K)
+      sheet.getRange(row, 12).setValue(new Date()); // Timestamp (Column L)
+      
       Logger.log('Checkout processed for game ID: ' + data.gameId);
     } 
     else if (data.action === 'return') {
       // Update the sheet for return
-      sheet.getRange(row, 5).setValue('TRUE'); // Available
-      sheet.getRange(row, 6).setValue(''); // CheckedOutTo
-      sheet.getRange(row, 7).setValue(''); // Email
-      sheet.getRange(row, 8).setValue(''); // Building
-      sheet.getRange(row, 9).setValue(''); // Apartment
-      sheet.getRange(row, 10).setValue(''); // DueDate
+      sheet.getRange(row, 6).setValue('TRUE'); // Available (Column F)
+      sheet.getRange(row, 7).setValue(''); // CheckedOutTo (Column G)
+      sheet.getRange(row, 8).setValue(''); // Email (Column H)
+      sheet.getRange(row, 9).setValue(''); // Building (Column I)
+      sheet.getRange(row, 10).setValue(''); // Apartment (Column J)
+      sheet.getRange(row, 11).setValue(''); // DueDate (Column K)
+      sheet.getRange(row, 12).setValue(new Date()); // Timestamp (Column L)
       
-      // Log the update
       Logger.log('Return processed for game ID: ' + data.gameId);
     }
 
-    // Create timestamp in sheet for tracking
+    // Create timestamp for tracking
     var timestamp = new Date();
-    sheet.getRange(row, 11).setValue(timestamp); // Timestamp column shifted to 11
     
     return ContentService.createTextOutput(JSON.stringify({
       success: true,
@@ -104,25 +114,28 @@ function clearAllCheckouts() {
   
   // Start from row 2 to skip header
   for(var i = 2; i <= lastRow; i++) {
-    sheet.getRange(i, 5).setValue('TRUE'); // Available
-    sheet.getRange(i, 6).setValue(''); // CheckedOutTo
-    sheet.getRange(i, 7).setValue(''); // Email
-    sheet.getRange(i, 8).setValue(''); // Building
-    sheet.getRange(i, 9).setValue(''); // Apartment
-    sheet.getRange(i, 10).setValue(''); // DueDate
+    sheet.getRange(i, 6).setValue('TRUE'); // Available (Column F)
+    sheet.getRange(i, 7).setValue(''); // CheckedOutTo (Column G)
+    sheet.getRange(i, 8).setValue(''); // Email (Column H)
+    sheet.getRange(i, 9).setValue(''); // Building (Column I)
+    sheet.getRange(i, 10).setValue(''); // Apartment (Column J)
+    sheet.getRange(i, 11).setValue(''); // DueDate (Column K)
+    sheet.getRange(i, 12).setValue(new Date()); // Timestamp (Column L)
   }
 }
 
 // Utility function to add a new game
-function addNewGame(name, players, duration, cost) {
+function addNewGame(name, imageUrl, players, duration, cost) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   var lastRow = sheet.getLastRow() + 1;
   
-  sheet.getRange(lastRow, 1).setValue(name);
-  sheet.getRange(lastRow, 2).setValue(players);
-  sheet.getRange(lastRow, 3).setValue(duration);
-  sheet.getRange(lastRow, 4).setValue(cost);
-  sheet.getRange(lastRow, 5).setValue('TRUE'); // Available
+  sheet.getRange(lastRow, 1).setValue(name); // Name
+  sheet.getRange(lastRow, 2).setValue(imageUrl); // Image URL
+  sheet.getRange(lastRow, 3).setValue(players); // Players
+  sheet.getRange(lastRow, 4).setValue(duration); // Duration
+  sheet.getRange(lastRow, 5).setValue(cost); // Cost
+  sheet.getRange(lastRow, 6).setValue('TRUE'); // Available
+  sheet.getRange(lastRow, 12).setValue(new Date()); // Timestamp
 }
 
 // Utility function to get all overdue games
@@ -135,16 +148,17 @@ function getOverdueGames() {
   // Skip header row
   for(var i = 1; i < data.length; i++) {
     var row = data[i];
-    if(row[9] && row[4] === 'FALSE') { // If there's a due date and game is checked out
-      var dueDate = new Date(row[9]);
+    if(row[10] && row[5] === 'FALSE') { // If there's a due date (Column K) and game is checked out
+      var dueDate = new Date(row[10]);
       if(dueDate < today) {
         overdueGames.push({
           name: row[0],
-          checkedOutTo: row[5],
-          email: row[6],
-          building: row[7],
-          apartment: row[8],
-          dueDate: row[9]
+          imageUrl: row[1],
+          checkedOutTo: row[6],
+          email: row[7],
+          building: row[8],
+          apartment: row[9],
+          dueDate: row[10]
         });
       }
     }
@@ -161,15 +175,21 @@ function getCheckoutHistory() {
   // Skip header row
   for(var i = 1; i < data.length; i++) {
     var row = data[i];
-    if(row[10]) { // If there's a timestamp (now column 11)
+    if(row[6] || row[5] === 'FALSE') { // If there's a name or status is checked out
       history.push({
-        name: row[0],
-        action: row[4] === 'TRUE' ? 'return' : 'checkout',
-        timestamp: row[10],
-        checkedOutTo: row[5] || 'N/A',
-        email: row[6] || 'N/A'
+        gameName: row[0] || 'Unknown Game',
+        imageUrl: row[1] || null,
+        isAvailable: row[5] === 'TRUE',
+        checkedOutTo: row[6] || 'N/A',
+        email: row[7] || 'N/A',
+        building: row[8] || 'N/A',
+        apartment: row[9] || 'N/A',
+        dueDate: row[10] || null,
+        timestamp: row[11] || new Date()
       });
     }
   }
-  return history.sort((a, b) => b.timestamp - a.timestamp);
+  
+  // Sort by timestamp in descending order
+  return history;
 }
