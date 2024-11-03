@@ -184,7 +184,6 @@
     <div id="gameList" class="game-list"></div>
 
     <script>
-        // Secure hashing function
         async function hashPassword(password) {
             const encoder = new TextEncoder();
             const data = encoder.encode(password);
@@ -194,12 +193,12 @@
         }
 
         const CONFIG = {
-            SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbzccOPHK7jAqx92N7cwzmCZA-0h2DkTzVAlt-dVWkCpn7obkDY_iizYLK4Q37o-5Kd4/exec',
-            ADMIN_HASH: '02cd57e5797707c36e2171902f8b51fdfa501411b4a786f92615e8c2f97a3753', // Hash of 'admin123' with salt
-            SYNC_INTERVAL: 120000,
+            SCRIPT_URL: 'https://script.google.com/macros/s/AKfycby5d1uRfuDO8Iihg5nH8GU6hYzALh9wF7fkO-OWA4ZDWbU6Sg17JeWjIANoU-TNHNWN/exec',
+            ADMIN_HASH: '02cd57e5797707c36e2171902f8b51fdfa501411b4a786f92615e8c2f97a3753',
+            SYNC_INTERVAL: 30000,
             SALT: 'MarcyParkLibrary2024',
             MAX_LOGIN_ATTEMPTS: 3,
-            LOCKOUT_TIME: 30 * 60 * 1000 // 30 minutes
+            LOCKOUT_TIME: 30 * 60 * 1000
         };
 
         let loginAttempts = {
@@ -208,19 +207,8 @@
             lockedUntil: 0
         };
 
-        let games = [
-            { id: 1, name: "Catan", players: "3-4", duration: "60-120 min", cost: 49.99, available: false, checkedOutTo: null, email: null, building: null, apartment: null, dueDate: null },
-            { id: 2, name: "Ticket to Ride", players: "2-5", duration: "30-60 min", cost: 44.99, available: true, checkedOutTo: null, email: null, building: null, apartment: null, dueDate: null },
-            { id: 3, name: "Pandemic", players: "2-4", duration: "45-60 min", cost: 39.99, available: true, checkedOutTo: null, email: null, building: null, apartment: null, dueDate: null },
-            { id: 4, name: "Carcassonne", players: "2-5", duration: "30-45 min", cost: 34.99, available: true, checkedOutTo: null, email: null, building: null, apartment: null, dueDate: null }
-        ];
-
+        let games = [];
         let isLoading = false;
-
-        const savedGames = localStorage.getItem('boardGames');
-        if (savedGames) {
-            games = JSON.parse(savedGames);
-        }
 
         async function verifyAdminPassword(password) {
             const now = Date.now();
@@ -351,19 +339,12 @@
                 const newData = JSON.parse(text);
                 
                 if (Array.isArray(newData)) {
-                    games = newData.map(newGame => {
-                        const existingGame = games.find(g => g.id === newGame.id);
-                        if (existingGame && !existingGame.available) {
-                            return existingGame;
-                        }
-                        return newGame;
-                    });
-                    localStorage.setItem('boardGames', JSON.stringify(games));
+                    games = newData;
                     updateSyncStatus('Sync successful', true);
                 }
             } catch (error) {
                 console.error('Fetch error:', error);
-                updateSyncStatus('Using local data (sync failed)', false);
+                updateSyncStatus('Failed to fetch data', false);
             } finally {
                 isLoading = false;
                 renderGames(games);
@@ -390,10 +371,7 @@
                     body: JSON.stringify(data)
                 });
 
-                localStorage.setItem('boardGames', JSON.stringify(games));
-                if (document.getElementById('adminPanel').classList.contains('visible')) {
-                    refreshHistory();
-                }
+                await fetchGames();
                 return true;
             } catch (error) {
                 console.error('Update error:', error);
@@ -441,9 +419,8 @@
                             Check Out
                         </button>
                     ` : `
-                        <input type="password" id="password-${game.id}" placeholder="Admin password">
                         <button class="button admin" onclick="returnGame(${game.id})" ${isLoading ? 'disabled' : ''}>
-                            Return Game (Admin Only)
+                            Return Game
                         </button>
                     `}
                 </div>
@@ -487,18 +464,6 @@
             });
 
             if (success) {
-                game.available = false;
-                game.checkedOutTo = nameInput.value.trim();
-                game.email = emailInput.value.trim();
-                game.building = buildingInput.value.trim();
-                game.apartment = apartmentInput.value.trim();
-                game.dueDate = dueDateStr;
-                
-                localStorage.setItem('boardGames', JSON.stringify(games));
-                renderGames(games);
-                if (document.getElementById('adminPanel').classList.contains('visible')) {
-                    refreshHistory();
-                }
                 updateSyncStatus('Checkout successful', true);
                 alert(`Checkout successful! Due date: ${dueDateStr}`);
             } else {
@@ -523,18 +488,6 @@
             });
 
             if (success) {
-                game.available = true;
-                game.checkedOutTo = null;
-                game.email = null;
-                game.building = null;
-                game.apartment = null;
-                game.dueDate = null;
-                
-                localStorage.setItem('boardGames', JSON.stringify(games));
-                renderGames(games);
-                if (document.getElementById('adminPanel').classList.contains('visible')) {
-                    refreshHistory();
-                }
                 updateSyncStatus('Return successful', true);
                 alert('Game successfully returned');
             } else {
@@ -570,21 +523,9 @@
         });
 
         // Initialize
-        renderGames(games);
-        updateSyncStatus('Using local data', false);
-        setTimeout(fetchGames, 1000);
+        updateSyncStatus('Fetching data...', false);
+        fetchGames();
         setInterval(fetchGames, CONFIG.SYNC_INTERVAL);
-
-        // Add event listener for storage changes
-        window.addEventListener('storage', (e) => {
-            if (e.key === 'boardGames') {
-                games = JSON.parse(e.newValue);
-                renderGames(games);
-                if (document.getElementById('adminPanel').classList.contains('visible')) {
-                    refreshHistory();
-                }
-            }
-        });
     </script>
 </body>
 </html>
