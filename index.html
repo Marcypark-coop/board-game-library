@@ -508,7 +508,7 @@
                     ${game.available ? `
                         <input type="text" id="name-${game.id}" placeholder="Your name (letters only)" required>
                         <input type="email" id="email-${game.id}" placeholder="Your email" required>
-                        <input type="text" id="building-${game.id}" placeholder="Building number (700 or 100)" required>
+                        <input type="text" id="building-${game.id}" placeholder="Building number (700 or 1000)" required>
                         <input type="text" id="apartment-${game.id}" placeholder="Apartment number" required>
                         <button class="button" onclick="checkoutGame(${game.id})" ${isLoading ? 'disabled' : ''}>
                             Check Out
@@ -563,7 +563,7 @@
                 return markInvalid(emailInput, 'Please enter a valid email address');
             }
             if (!validateInput(buildingInput, 'building')) {
-                return markInvalid(buildingInput, 'Building must be either 100 or 700');
+                return markInvalid(buildingInput, 'Building must be either 1000 or 700');
             }
             if (!validateInput(apartmentInput, 'apartment')) {
                 return markInvalid(apartmentInput, 'Apartment must be a number');
