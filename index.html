@@ -128,26 +128,33 @@
 
     <script>
         const CONFIG = {
-            SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbx4QmFTP7V9JfPbjyyyNeZ7zULdyVAz427UfpTx0oZ9lBmHBswF17gx66L2qZuvcK_d/exec',
+            SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbxJ0M32iui3Ao-qTTLqdeig8aS3SKjoYODOwrPKi0dozuMDFhSASUGBHARLFAavwk9M/exec',
             ADMIN_PASSWORD: 'admin123',
-            SYNC_INTERVAL: 60000 // 1 minute
+            SYNC_INTERVAL: 120000 // 2 minutes
         };
 
         let games = [];
+        let isLoading = false;
 
         async function fetchGames() {
+            if (isLoading) return;
+            isLoading = true;
+
             try {
-                const response = await fetch(`${CONFIG.SCRIPT_URL}?action=getGames`);
-                const data = await response.json();
+                const response = await fetch(CONFIG.SCRIPT_URL);
+                const text = await response.text();
+                const newData = JSON.parse(text);
                 
-                if (Array.isArray(data)) {
-                    games = data;
-                    updateSyncStatus('Sync successful', true);
+                if (Array.isArray(newData)) {
+                    games = newData; // Update games with fresh data
                     renderGames(games);
+                    updateSyncStatus('Sync successful', true);
                 }
             } catch (error) {
                 console.error('Fetch error:', error);
-                updateSyncStatus(`Sync failed: ${error.message}`, false);
+                updateSyncStatus('Failed to sync games', false);
+            } finally {
+                isLoading = false;
             }
         }
 
@@ -155,13 +162,12 @@
             try {
                 await fetch(CONFIG.SCRIPT_URL, {
                     method: 'POST',
+                    mode: 'no-cors',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
                     },
                     body: JSON.stringify(data)
                 });
-                
-                await fetchGames();
                 return true;
             } catch (error) {
                 console.error('Update error:', error);
@@ -195,7 +201,6 @@
                 </span></p>
                 ${game.checkedOutTo ? `
                     <p>Checked out to: ${game.checkedOutTo}<br>
-                    Email: ${game.email}<br>
                     Building: ${game.building}, Apt: ${game.apartment}<br>
                     Due: ${game.dueDate}</p>
                     ${warningMessage}
@@ -203,15 +208,14 @@
                 <div class="checkout-form">
                     ${game.available ? `
                         <input type="text" id="name-${game.id}" placeholder="Your name" required>
-                        <input type="email" id="email-${game.id}" placeholder="Your email" required>
                         <input type="text" id="building-${game.id}" placeholder="Building number" required>
                         <input type="text" id="apartment-${game.id}" placeholder="Apartment number" required>
-                        <button class="button" onclick="checkoutGame(${game.id})">
+                        <button class="button" onclick="checkoutGame(${game.id})" ${isLoading ? 'disabled' : ''}>
                             Check Out
                         </button>
                     ` : `
                         <input type="password" id="password-${game.id}" placeholder="Admin password">
-                        <button class="button admin" onclick="returnGame(${game.id})">
+                        <button class="button admin" onclick="returnGame(${game.id})" ${isLoading ? 'disabled' : ''}>
                             Return Game (Admin Only)
                         </button>
                     `}
@@ -223,22 +227,15 @@
         async function checkoutGame(gameId) {
             const game = games.find(g => g.id === gameId);
             const nameInput = document.getElementById(`name-${gameId}`);
-            const emailInput = document.getElementById(`email-${gameId}`);
             const buildingInput = document.getElementById(`building-${gameId}`);
             const apartmentInput = document.getElementById(`apartment-${gameId}`);
             
-            if (!nameInput.value.trim() || !emailInput.value.trim() || 
-                !buildingInput.value.trim() || !apartmentInput.value.trim()) {
+            if (!nameInput.value.trim() || !buildingInput.value.trim() || !apartmentInput.value.trim()) {
                 alert('Please fill in all fields');
                 return;
             }
 
-            if (!emailInput.value.includes('@')) {
-                alert('Please enter a valid email address');
-                return;
-            }
-
-            updateSyncStatus('Processing checkout...', true);
+            updateSyncStatus('Updating...', true);
             const dueDate = new Date();
             dueDate.setDate(dueDate.getDate() + 15);
             const dueDateStr = dueDate.toLocaleDateString();
@@ -247,52 +244,71 @@
                 action: 'checkout',
                 gameId: game.id,
                 name: nameInput.value.trim(),
-                email: emailInput.value.trim(),
                 building: buildingInput.value.trim(),
                 apartment: apartmentInput.value.trim(),
                 dueDate: dueDateStr
             });
 
-            updateSyncStatus(success ? 'Checkout successful' : 'Checkout failed', success);
+            if (success) {
+                game.available = false;
+                game.checkedOutTo = nameInput.value.trim();
+                game.building = buildingInput.value.trim();
+                game.apartment = apartmentInput.value.trim();
+                game.dueDate = dueDateStr;
+                renderGames(games);
+                updateSyncStatus('Checkout successful', true);
+            } else {
+                updateSyncStatus('Checkout failed', false);
+            }
         }
 
         async function returnGame(gameId) {
             const passwordInput = document.getElementById(`password-${gameId}`);
-            if (passwordInput.value !== CONFIG.ADMIN_PASSWORD) {
-                alert('Incorrect password');
+            if (passwordInput.value.trim() !== CONFIG.ADMIN_PASSWORD) {
+                alert('Invalid admin password');
                 return;
             }
 
-            updateSyncStatus('Processing return...', true);
-            const success = await updateSheet({
-                action: 'return',
-                gameId: gameId
-            });
-
-            updateSyncStatus(success ? 'Return successful' : 'Return failed', success);
+            updateSyncStatus('Updating...', true);
+            const success = await updateSheet({ action: 'return', gameId: gameId });
+            if (success) {
+                const game = games.find(g => g.id === gameId);
+                game.available = true;
+                game.checkedOutTo = '';
+                game.dueDate = '';
+                game.building = '';
+                game.apartment = '';
+                renderGames(games);
+                updateSyncStatus('Game returned successfully', true);
+            } else {
+                updateSyncStatus('Return failed', false);
+            }
         }
 
         function renderGames(games) {
             const gameList = document.getElementById('gameList');
             gameList.innerHTML = '';
             games.forEach(game => {
-                gameList.appendChild(createGameCard(game));
+                const gameCard = createGameCard(game);
+                gameList.appendChild(gameCard);
             });
         }
 
         function updateSyncStatus(message, success) {
             const syncStatus = document.getElementById('syncStatus');
-            syncStatus.innerHTML = message;
-            syncStatus.className = 'sync-status sync-badge ' + (success ? 'sync-success' : 'sync-error');
+            syncStatus.innerText = message;
+            syncStatus.className = `sync-status ${success ? 'sync-success' : 'sync-error'}`;
         }
 
-        document.getElementById('searchInput').addEventListener('input', (e) => {
-            const searchTerm = e.target.value.toLowerCase();
+        document.getElementById('searchInput').addEventListener('input', (event) => {
+            const searchTerm = event.target.value.toLowerCase();
             const filteredGames = games.filter(game => game.name.toLowerCase().includes(searchTerm));
             renderGames(filteredGames);
         });
 
+        // Fetch games on initial load
         fetchGames();
+        // Set an interval to refresh games every 2 minutes
         setInterval(fetchGames, CONFIG.SYNC_INTERVAL);
     </script>
 </body>
