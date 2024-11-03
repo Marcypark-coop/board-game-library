@@ -247,7 +247,7 @@
             <li>A warning will be issued 1 week before the due date</li>
             <li>If not returned by the due date, you will be fined the full cost of the board game</li>
         </ul>
-        <p><strong>Note:</strong> All checkouts require valid building (100 or 700) and apartment information</p>
+        <p><strong>Note:</strong> All checkouts require valid building (1000 or 700) and apartment information</p>
     </div>
 
     <input type="text" id="searchInput" class="search-bar" placeholder="Search for games...">
@@ -386,7 +386,7 @@
                 case 'email':
                     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
                 case 'building':
-                    return ['100', '700'].includes(value);
+                    return ['1000', '700'].includes(value);
                 case 'apartment':
                     return /^\d+$/.test(value);
                 default:
