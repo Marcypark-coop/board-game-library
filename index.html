@@ -128,13 +128,26 @@
 
     <script>
         const CONFIG = {
-            SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbxJ0M32iui3Ao-qTTLqdeig8aS3SKjoYODOwrPKi0dozuMDFhSASUGBHARLFAavwk9M/exec',
+            SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbwKYfZgtB0gYHtFOp2k2X0QyB4SXt__TD0CSpKklAiZHSBwz3cCBimP7ERzTfkpqoFR/exec',
             ADMIN_PASSWORD: 'admin123',
-            SYNC_INTERVAL: 120000 // 2 minutes
+            SYNC_INTERVAL: 120000 // 1 minute
         };
 
-        let games = [];
+        // Initial games data
+        let games = [
+            { id: 1, name: "Catan", players: "3-4", duration: "60-120 min", cost: 49.99, available: true, checkedOutTo: null, dueDate: null, building: null, apartment: null },
+            { id: 2, name: "Ticket to Ride", players: "2-5", duration: "30-60 min", cost: 44.99, available: true, checkedOutTo: null, dueDate: null, building: null, apartment: null },
+            { id: 3, name: "Pandemic", players: "2-4", duration: "45-60 min", cost: 39.99, available: true, checkedOutTo: null, dueDate: null, building: null, apartment: null },
+            { id: 4, name: "Carcassonne", players: "2-5", duration: "30-45 min", cost: 34.99, available: true, checkedOutTo: null, dueDate: null, building: null, apartment: null }
+        ];
+
         let isLoading = false;
+
+        // Load games from localStorage if available
+        const savedGames = localStorage.getItem('boardGames');
+        if (savedGames) {
+            games = JSON.parse(savedGames);
+        }
 
         async function fetchGames() {
             if (isLoading) return;
@@ -146,21 +159,29 @@
                 const newData = JSON.parse(text);
                 
                 if (Array.isArray(newData)) {
-                    games = newData; // Update games with fresh data
-                    renderGames(games);
+                    // Preserve checkout status for checked out games
+                    games = newData.map(newGame => {
+                        const existingGame = games.find(g => g.id === newGame.id);
+                        if (existingGame && !existingGame.available) {
+                            return existingGame; // Keep existing game data if checked out
+                        }
+                        return newGame;
+                    });
+                    localStorage.setItem('boardGames', JSON.stringify(games));
                     updateSyncStatus('Sync successful', true);
                 }
             } catch (error) {
                 console.error('Fetch error:', error);
-                updateSyncStatus('Failed to sync games', false);
+                updateSyncStatus('Using local data (sync failed)', false);
             } finally {
                 isLoading = false;
+                renderGames(games);
             }
         }
 
         async function updateSheet(data) {
             try {
-                await fetch(CONFIG.SCRIPT_URL, {
+                const response = await fetch(CONFIG.SCRIPT_URL, {
                     method: 'POST',
                     mode: 'no-cors',
                     headers: {
@@ -168,6 +189,9 @@
                     },
                     body: JSON.stringify(data)
                 });
+
+                // Save to localStorage after successful update
+                localStorage.setItem('boardGames', JSON.stringify(games));
                 return true;
             } catch (error) {
                 console.error('Update error:', error);
@@ -255,60 +279,84 @@
                 game.building = buildingInput.value.trim();
                 game.apartment = apartmentInput.value.trim();
                 game.dueDate = dueDateStr;
+                
+                localStorage.setItem('boardGames', JSON.stringify(games));
                 renderGames(games);
                 updateSyncStatus('Checkout successful', true);
+                alert(`Checkout successful! Due date: ${dueDateStr}`);
             } else {
                 updateSyncStatus('Checkout failed', false);
+                alert('Checkout failed. Please try again.');
             }
         }
 
         async function returnGame(gameId) {
+            const game = games.find(g => g.id === gameId);
             const passwordInput = document.getElementById(`password-${gameId}`);
-            if (passwordInput.value.trim() !== CONFIG.ADMIN_PASSWORD) {
-                alert('Invalid admin password');
+            
+            if (passwordInput.value !== CONFIG.ADMIN_PASSWORD) {
+                alert('Incorrect admin password');
                 return;
             }
 
             updateSyncStatus('Updating...', true);
-            const success = await updateSheet({ action: 'return', gameId: gameId });
+            const success = await updateSheet({
+                action: 'return',
+                gameId: game.id
+            });
+
             if (success) {
-                const game = games.find(g => g.id === gameId);
                 game.available = true;
-                game.checkedOutTo = '';
-                game.dueDate = '';
-                game.building = '';
-                game.apartment = '';
+                game.checkedOutTo = null;
+                game.building = null;
+                game.apartment = null;
+                game.dueDate = null;
+                
+                localStorage.setItem('boardGames', JSON.stringify(games));
                 renderGames(games);
-                updateSyncStatus('Game returned successfully', true);
+                updateSyncStatus('Return successful', true);
+                alert('Game successfully returned');
             } else {
                 updateSyncStatus('Return failed', false);
+                alert('Return failed. Please try again.');
             }
         }
 
-        function renderGames(games) {
-            const gameList = document.getElementById('gameList');
-            gameList.innerHTML = '';
-            games.forEach(game => {
-                const gameCard = createGameCard(game);
-                gameList.appendChild(gameCard);
+        function renderGames(gameList) {
+            const container = document.getElementById('gameList');
+            container.innerHTML = '';
+            gameList.forEach(game => {
+                container.appendChild(createGameCard(game));
             });
         }
 
         function updateSyncStatus(message, success) {
-            const syncStatus = document.getElementById('syncStatus');
-            syncStatus.innerText = message;
-            syncStatus.className = `sync-status ${success ? 'sync-success' : 'sync-error'}`;
+            const status = document.getElementById('syncStatus');
+            status.innerHTML = `
+                ${message}
+                <span class="sync-badge ${success ? 'sync-success' : 'sync-error'}">
+                    ${new Date().toLocaleString()}
+                </span>
+            `;
         }
 
-        document.getElementById('searchInput').addEventListener('input', (event) => {
-            const searchTerm = event.target.value.toLowerCase();
-            const filteredGames = games.filter(game => game.name.toLowerCase().includes(searchTerm));
+        // Search functionality
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+            const searchTerm = e.target.value.toLowerCase();
+            const filteredGames = games.filter(game => 
+                game.name.toLowerCase().includes(searchTerm)
+            );
             renderGames(filteredGames);
         });
 
-        // Fetch games on initial load
-        fetchGames();
-        // Set an interval to refresh games every 2 minutes
+        // Initialize with local data first
+        renderGames(games);
+        updateSyncStatus('Using local data', false);
+
+        // Try initial sync after a short delay
+        setTimeout(fetchGames, 1000);
+        
+        // Set up periodic sync
         setInterval(fetchGames, CONFIG.SYNC_INTERVAL);
     </script>
 </body>
