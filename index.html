@@ -116,7 +116,6 @@
             border-color: #e74c3c;
             background-color: #ffd7d7;
         }
-        /* Admin Panel Styles */
         .admin-panel {
             display: none;
             background: white;
@@ -127,6 +126,15 @@
         }
         .admin-panel.visible {
             display: block;
+        }
+        .admin-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .admin-header .button {
+            width: auto;
         }
         .history-card {
             border: 1px solid #ddd;
@@ -154,7 +162,10 @@
     </div>
 
     <div id="adminPanel" class="admin-panel">
-        <h2>Admin Panel - Checkout History</h2>
+        <div class="admin-header">
+            <h2>Admin Panel - Checkout History</h2>
+            <button onclick="adminLogout()" class="button admin">Logout</button>
+        </div>
         <div id="checkoutHistory"></div>
     </div>
 
@@ -173,10 +184,28 @@
     <div id="gameList" class="game-list"></div>
 
     <script>
+        // Secure hashing function
+        async function hashPassword(password) {
+            const encoder = new TextEncoder();
+            const data = encoder.encode(password);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
         const CONFIG = {
             SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbzccOPHK7jAqx92N7cwzmCZA-0h2DkTzVAlt-dVWkCpn7obkDY_iizYLK4Q37o-5Kd4/exec',
-            ADMIN_PASSWORD: 'admin123',
-            SYNC_INTERVAL: 120000
+            ADMIN_HASH: '02cd57e5797707c36e2171902f8b51fdfa501411b4a786f92615e8c2f97a3753', // Hash of 'admin123' with salt
+            SYNC_INTERVAL: 120000,
+            SALT: 'MarcyParkLibrary2024',
+            MAX_LOGIN_ATTEMPTS: 3,
+            LOCKOUT_TIME: 30 * 60 * 1000 // 30 minutes
+        };
+
+        let loginAttempts = {
+            count: 0,
+            lastAttempt: 0,
+            lockedUntil: 0
         };
 
         let games = [
@@ -193,21 +222,74 @@
             games = JSON.parse(savedGames);
         }
 
-        function toggleAdminLogin() {
-            const password = prompt("Enter admin password:");
-            if (password === CONFIG.ADMIN_PASSWORD) {
+        async function verifyAdminPassword(password) {
+            const now = Date.now();
+            if (now < loginAttempts.lockedUntil) {
+                const minutesLeft = Math.ceil((loginAttempts.lockedUntil - now) / 60000);
+                throw new Error(`Account is locked. Please try again in ${minutesLeft} minutes.`);
+            }
+
+            if (now - loginAttempts.lastAttempt > CONFIG.LOCKOUT_TIME) {
+                loginAttempts.count = 0;
+            }
+
+            loginAttempts.lastAttempt = now;
+
+            if (loginAttempts.count >= CONFIG.MAX_LOGIN_ATTEMPTS) {
+                loginAttempts.lockedUntil = now + CONFIG.LOCKOUT_TIME;
+                throw new Error('Too many failed attempts. Account is locked for 30 minutes.');
+            }
+
+            const hashedInput = await hashPassword(password + CONFIG.SALT);
+            
+            if (hashedInput === CONFIG.ADMIN_HASH) {
+                loginAttempts.count = 0;
+                return true;
+            } else {
+                loginAttempts.count++;
+                const remainingAttempts = CONFIG.MAX_LOGIN_ATTEMPTS - loginAttempts.count;
+                throw new Error(`Incorrect password. ${remainingAttempts} attempts remaining.`);
+            }
+        }
+
+        async function generateSessionToken() {
+            const random = new Uint8Array(16);
+            crypto.getRandomValues(random);
+            return Array.from(random).map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        function verifyAdminSession() {
+            const sessionToken = sessionStorage.getItem('adminSession');
+            return !!sessionToken;
+        }
+
+        async function toggleAdminLogin() {
+            try {
+                const password = prompt("Enter admin password:");
+                if (!password) return;
+
+                await verifyAdminPassword(password);
+                
                 document.getElementById('adminPanel').classList.add('visible');
                 refreshHistory();
-            } else {
-                alert("Incorrect password");
+                
+                const sessionToken = await generateSessionToken();
+                sessionStorage.setItem('adminSession', sessionToken);
+                
+            } catch (error) {
+                alert(error.message);
             }
+        }
+
+        function adminLogout() {
+            sessionStorage.removeItem('adminSession');
+            document.getElementById('adminPanel').classList.remove('visible');
         }
 
         function refreshHistory() {
             const historyContainer = document.getElementById('checkoutHistory');
             historyContainer.innerHTML = '';
 
-            // Display only checked out games
             games.forEach(game => {
                 if (!game.available) {
                     const card = document.createElement('div');
@@ -225,7 +307,6 @@
                 }
             });
 
-            // Show message if no games are checked out
             if (historyContainer.children.length === 0) {
                 historyContainer.innerHTML = '<p>No games are currently checked out.</p>';
             }
@@ -293,6 +374,12 @@
         }
 
         async function updateSheet(data) {
+            if (data.action === 'return' && !verifyAdminSession()) {
+                alert('Admin session expired. Please log in again.');
+                document.getElementById('adminPanel').classList.remove('visible');
+                return false;
+            }
+
             try {
                 const response = await fetch(CONFIG.SCRIPT_URL, {
                     method: 'POST',
@@ -421,14 +508,14 @@
         }
 
         async function returnGame(gameId) {
-            const game = games.find(g => g.id === gameId);
-            const passwordInput = document.getElementById(`password-${gameId}`);
-            
-            if (passwordInput.value !== CONFIG.ADMIN_PASSWORD) {
-                alert('Incorrect admin password');
+            if (!verifyAdminSession()) {
+                alert('Admin session expired. Please log in again.');
+                document.getElementById('adminPanel').classList.remove('visible');
                 return;
             }
 
+            const game = games.find(g => g.id === gameId);
+            
             updateSyncStatus('Updating...', true);
             const success = await updateSheet({
                 action: 'return',
@@ -482,11 +569,22 @@
             renderGames(filteredGames);
         });
 
-        // Initial render
+        // Initialize
         renderGames(games);
         updateSyncStatus('Using local data', false);
         setTimeout(fetchGames, 1000);
         setInterval(fetchGames, CONFIG.SYNC_INTERVAL);
+
+        // Add event listener for storage changes
+        window.addEventListener('storage', (e) => {
+            if (e.key === 'boardGames') {
+                games = JSON.parse(e.newValue);
+                renderGames(games);
+                if (document.getElementById('adminPanel').classList.contains('visible')) {
+                    refreshHistory();
+                }
+            }
+        });
     </script>
 </body>
 </html>
