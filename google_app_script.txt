@@ -1,0 +1,169 @@
+function doGet(e) {
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    var data = sheet.getDataRange().getValues();
+    var games = [];
+    
+    // Skip header row
+    for (var i = 1; i < data.length; i++) {
+      var row = data[i];
+      if (row[0]) { // If name exists
+        games.push({
+          id: i,
+          name: row[0],
+          players: row[1],
+          duration: row[2],
+          cost: parseFloat(row[3]) || 0,
+          available: row[4] === 'TRUE',
+          checkedOutTo: row[5] || null,
+          building: row[6] || null,
+          apartment: row[7] || null,
+          dueDate: row[8] || null
+        });
+      }
+    }
+    
+    return ContentService.createTextOutput(JSON.stringify(games))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch(error) {
+    return ContentService.createTextOutput(JSON.stringify({
+      error: true,
+      message: error.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function doPost(e) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+    
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    var data = JSON.parse(e.postData.contents);
+    var row = data.gameId + 1; // Add 1 for header row
+
+    // Log the incoming data for debugging
+    Logger.log('Received data: ' + JSON.stringify(data));
+    
+    if (data.action === 'checkout') {
+      // Update the sheet for checkout
+      sheet.getRange(row, 5).setValue('FALSE'); // Available
+      sheet.getRange(row, 6).setValue(data.name); // CheckedOutTo
+      sheet.getRange(row, 7).setValue(data.building); // Building
+      sheet.getRange(row, 8).setValue(data.apartment); // Apartment
+      sheet.getRange(row, 9).setValue(data.dueDate); // DueDate
+      
+      // Log the update
+      Logger.log('Checkout processed for game ID: ' + data.gameId);
+    } 
+    else if (data.action === 'return') {
+      // Update the sheet for return
+      sheet.getRange(row, 5).setValue('TRUE'); // Available
+      sheet.getRange(row, 6).setValue(''); // CheckedOutTo
+      sheet.getRange(row, 7).setValue(''); // Building
+      sheet.getRange(row, 8).setValue(''); // Apartment
+      sheet.getRange(row, 9).setValue(''); // DueDate
+      
+      // Log the update
+      Logger.log('Return processed for game ID: ' + data.gameId);
+    }
+
+    // Create timestamp in sheet for tracking
+    var timestamp = new Date();
+    sheet.getRange(row, 10).setValue(timestamp); // Assuming column 10 is for timestamps
+    
+    return ContentService.createTextOutput(JSON.stringify({
+      success: true,
+      action: data.action,
+      gameId: data.gameId,
+      timestamp: timestamp
+    })).setMimeType(ContentService.MimeType.JSON);
+    
+  } catch(error) {
+    // Log the error
+    Logger.log('Error: ' + error.toString());
+    
+    return ContentService.createTextOutput(JSON.stringify({
+      error: true,
+      message: error.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
+  } finally {
+    if (lock.hasLock()) {
+      lock.releaseLock();
+    }
+  }
+}
+
+// Utility function to clear all checkouts (for admin use)
+function clearAllCheckouts() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var lastRow = sheet.getLastRow();
+  
+  // Start from row 2 to skip header
+  for(var i = 2; i <= lastRow; i++) {
+    sheet.getRange(i, 5).setValue('TRUE'); // Available
+    sheet.getRange(i, 6).setValue(''); // CheckedOutTo
+    sheet.getRange(i, 7).setValue(''); // Building
+    sheet.getRange(i, 8).setValue(''); // Apartment
+    sheet.getRange(i, 9).setValue(''); // DueDate
+  }
+}
+
+// Utility function to add a new game
+function addNewGame(name, players, duration, cost) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var lastRow = sheet.getLastRow() + 1;
+  
+  sheet.getRange(lastRow, 1).setValue(name);
+  sheet.getRange(lastRow, 2).setValue(players);
+  sheet.getRange(lastRow, 3).setValue(duration);
+  sheet.getRange(lastRow, 4).setValue(cost);
+  sheet.getRange(lastRow, 5).setValue('TRUE'); // Available
+}
+
+// Utility function to get all overdue games
+function getOverdueGames() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var data = sheet.getDataRange().getValues();
+  var overdueGames = [];
+  var today = new Date();
+  
+  // Skip header row
+  for(var i = 1; i < data.length; i++) {
+    var row = data[i];
+    if(row[8] && row[4] === 'FALSE') { // If there's a due date and game is checked out
+      var dueDate = new Date(row[8]);
+      if(dueDate < today) {
+        overdueGames.push({
+          name: row[0],
+          checkedOutTo: row[5],
+          building: row[6],
+          apartment: row[7],
+          dueDate: row[8]
+        });
+      }
+    }
+  }
+  return overdueGames;
+}
+
+// Utility function to get checkout history
+function getCheckoutHistory() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var data = sheet.getDataRange().getValues();
+  var history = [];
+  
+  // Skip header row
+  for(var i = 1; i < data.length; i++) {
+    var row = data[i];
+    if(row[9]) { // If there's a timestamp
+      history.push({
+        name: row[0],
+        action: row[4] === 'TRUE' ? 'return' : 'checkout',
+        timestamp: row[9],
+        checkedOutTo: row[5] || 'N/A'
+      });
+    }
+  }
+  return history.sort((a, b) => b.timestamp - a.timestamp);
+}
