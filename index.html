@@ -347,18 +347,13 @@
         function refreshHistory() {
             const historyContainer = document.getElementById('checkoutHistory');
             historyContainer.innerHTML = '';
-
+        
             games.forEach(game => {
                 if (!game.available) {
                     const card = document.createElement('div');
                     card.className = `history-card ${isOverdue(game.dueDate) ? 'overdue' : ''}`;
                     
-                    const imageHtml = game.imageUrl ? 
-                        `<img src="${game.imageUrl}" alt="${game.name}" class="game-image" onerror="this.onerror=null; this.src='/api/placeholder/400/200'; this.alt='Image failed to load';">` :
-                        `<div class="game-image placeholder">No image available</div>`;
-
                     card.innerHTML = `
-                        ${imageHtml}
                         <h3>${game.name}</h3>
                         <p><strong>CHECKED OUT</strong></p>
                         <p>Player: ${game.checkedOutTo || 'N/A'}</p>
@@ -370,7 +365,7 @@
                     historyContainer.appendChild(card);
                 }
             });
-
+        
             if (historyContainer.children.length === 0) {
                 historyContainer.innerHTML = '<p>No games are currently checked out.</p>';
             }
