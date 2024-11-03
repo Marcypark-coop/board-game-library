@@ -19,6 +19,15 @@
             border-radius: 8px;
             margin-bottom: 20px;
         }
+        .admin-button {
+            float: right;
+            background-color: #e74c3c;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
         .policy-section {
             background-color: #fff3cd;
             border: 1px solid #ffeeba;
@@ -107,13 +116,46 @@
             border-color: #e74c3c;
             background-color: #ffd7d7;
         }
+        /* Admin Panel Styles */
+        .admin-panel {
+            display: none;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .admin-panel.visible {
+            display: block;
+        }
+        .history-card {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            background-color: white;
+        }
+        .history-card h3 {
+            margin-top: 0;
+            color: #2c3e50;
+        }
+        .history-card.overdue {
+            border-color: #e74c3c;
+            background-color: #fff5f5;
+        }
     </style>
 </head>
 <body>
     <div class="header">
+        <button class="admin-button" onclick="toggleAdminLogin()">Admin Login</button>
         <h1>Marcy Park Co-op Board Game Library</h1>
         <p>Browse and check out games from our collection</p>
         <div id="syncStatus" class="sync-status">Initializing...</div>
+    </div>
+
+    <div id="adminPanel" class="admin-panel">
+        <h2>Admin Panel - Checkout History</h2>
+        <div id="checkoutHistory"></div>
     </div>
 
     <div class="policy-section">
@@ -138,7 +180,7 @@
         };
 
         let games = [
-            { id: 1, name: "Catan", players: "3-4", duration: "60-120 min", cost: 49.99, available: true, checkedOutTo: null, email: null, building: null, apartment: null, dueDate: null },
+            { id: 1, name: "Catan", players: "3-4", duration: "60-120 min", cost: 49.99, available: false, checkedOutTo: "arvind", email: "arvind.renga96@gmail.com", building: "700", apartment: "22", dueDate: "11/18/2024" },
             { id: 2, name: "Ticket to Ride", players: "2-5", duration: "30-60 min", cost: 44.99, available: true, checkedOutTo: null, email: null, building: null, apartment: null, dueDate: null },
             { id: 3, name: "Pandemic", players: "2-4", duration: "45-60 min", cost: 39.99, available: true, checkedOutTo: null, email: null, building: null, apartment: null, dueDate: null },
             { id: 4, name: "Carcassonne", players: "2-5", duration: "30-45 min", cost: 34.99, available: true, checkedOutTo: null, email: null, building: null, apartment: null, dueDate: null }
@@ -149,6 +191,49 @@
         const savedGames = localStorage.getItem('boardGames');
         if (savedGames) {
             games = JSON.parse(savedGames);
+        }
+
+        function toggleAdminLogin() {
+            const password = prompt("Enter admin password:");
+            if (password === CONFIG.ADMIN_PASSWORD) {
+                document.getElementById('adminPanel').classList.add('visible');
+                refreshHistory();
+            } else {
+                alert("Incorrect password");
+            }
+        }
+
+        function refreshHistory() {
+            const historyContainer = document.getElementById('checkoutHistory');
+            historyContainer.innerHTML = '';
+
+            // Display only checked out games
+            games.forEach(game => {
+                if (!game.available) {
+                    const card = document.createElement('div');
+                    card.className = `history-card ${isOverdue(game.dueDate) ? 'overdue' : ''}`;
+                    card.innerHTML = `
+                        <h3>${game.name}</h3>
+                        <p><strong>CHECKED OUT</strong></p>
+                        <p>Player: ${game.checkedOutTo || 'N/A'}</p>
+                        <p>Email: ${game.email || 'N/A'}</p>
+                        <p>Location: Building ${game.building || 'N/A'}, Apt ${game.apartment || 'N/A'}</p>
+                        <p>Due Date: ${game.dueDate || 'N/A'}</p>
+                        <p>Last Updated: ${new Date().toLocaleString()}</p>
+                    `;
+                    historyContainer.appendChild(card);
+                }
+            });
+
+            // Show message if no games are checked out
+            if (historyContainer.children.length === 0) {
+                historyContainer.innerHTML = '<p>No games are currently checked out.</p>';
+            }
+        }
+
+        function isOverdue(dueDate) {
+            if (!dueDate) return false;
+            return new Date(dueDate) < new Date();
         }
 
         function validateInput(input, type) {
@@ -201,6 +286,9 @@
             } finally {
                 isLoading = false;
                 renderGames(games);
+                if (document.getElementById('adminPanel').classList.contains('visible')) {
+                    refreshHistory();
+                }
             }
         }
 
@@ -216,6 +304,9 @@
                 });
 
                 localStorage.setItem('boardGames', JSON.stringify(games));
+                if (document.getElementById('adminPanel').classList.contains('visible')) {
+                    refreshHistory();
+                }
                 return true;
             } catch (error) {
                 console.error('Update error:', error);
@@ -280,7 +371,6 @@
             const buildingInput = document.getElementById(`building-${gameId}`);
             const apartmentInput = document.getElementById(`apartment-${gameId}`);
             
-            // Validate each field
             if (!validateInput(nameInput, 'name')) {
                 return markInvalid(nameInput, 'Name must contain only letters');
             }
@@ -319,6 +409,9 @@
                 
                 localStorage.setItem('boardGames', JSON.stringify(games));
                 renderGames(games);
+                if (document.getElementById('adminPanel').classList.contains('visible')) {
+                    refreshHistory();
+                }
                 updateSyncStatus('Checkout successful', true);
                 alert(`Checkout successful! Due date: ${dueDateStr}`);
             } else {
@@ -352,6 +445,9 @@
                 
                 localStorage.setItem('boardGames', JSON.stringify(games));
                 renderGames(games);
+                if (document.getElementById('adminPanel').classList.contains('visible')) {
+                    refreshHistory();
+                }
                 updateSyncStatus('Return successful', true);
                 alert('Game successfully returned');
             } else {
@@ -386,6 +482,7 @@
             renderGames(filteredGames);
         });
 
+        // Initial render
         renderGames(games);
         updateSyncStatus('Using local data', false);
         setTimeout(fetchGames, 1000);
