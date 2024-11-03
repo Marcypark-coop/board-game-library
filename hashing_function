@@ -1,0 +1,8 @@
+async function hashNewPassword(password) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(password + 'MarcyParkLibrary2024');
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+hashNewPassword('your_new_password_here').then(console.log);
