@@ -46,6 +46,40 @@
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
+        .game-image {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+        .game-image.placeholder {
+            background-color: #f0f0f0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #666;
+            font-size: 14px;
+        }
+        .game-header {
+            margin-bottom: 15px;
+        }
+        .image-url-section {
+            margin: 10px 0;
+            display: flex;
+            gap: 10px;
+        }
+        .image-url-input {
+            flex: 1;
+            padding: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .image-url-button {
+            width: auto !important;
+            padding: 5px 10px;
+            font-size: 0.9em;
+        }
         .checkout-form {
             margin-top: 10px;
         }
@@ -151,6 +185,42 @@
             border-color: #e74c3c;
             background-color: #fff5f5;
         }
+                // Add these styles to your existing CSS
+        .game-header {
+            margin-bottom: 15px;
+        }
+        .image-url-section {
+            margin-top: 10px;
+            display: flex;
+            gap: 10px;
+        }
+        .image-url-input {
+            flex: 1;
+            padding: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .image-url-button {
+            width: auto !important;
+            padding: 5px 10px;
+            font-size: 0.9em;
+            background-color: #e74c3c;
+        }
+        .game-image {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+        .game-image.placeholder {
+            background-color: #f0f0f0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #666;
+            font-size: 14px;
+        }
     </style>
 </head>
 <body>
@@ -193,7 +263,7 @@
         }
 
         const CONFIG = {
-            SCRIPT_URL: 'https://script.google.com/macros/s/AKfycby5d1uRfuDO8Iihg5nH8GU6hYzALh9wF7fkO-OWA4ZDWbU6Sg17JeWjIANoU-TNHNWN/exec',
+            SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbzKRh3yzWfXQrKRFnplsnUzWfUIQGjeHQPxMKP-PlbHk11HmEV1MzUg7TtVWrrWQ8pr/exec',
             ADMIN_HASH: '02cd57e5797707c36e2171902f8b51fdfa501411b4a786f92615e8c2f97a3753',
             SYNC_INTERVAL: 30000,
             SALT: 'MarcyParkLibrary2024',
@@ -282,7 +352,13 @@
                 if (!game.available) {
                     const card = document.createElement('div');
                     card.className = `history-card ${isOverdue(game.dueDate) ? 'overdue' : ''}`;
+                    
+                    const imageHtml = game.imageUrl ? 
+                        `<img src="${game.imageUrl}" alt="${game.name}" class="game-image" onerror="this.onerror=null; this.src='/api/placeholder/400/200'; this.alt='Image failed to load';">` :
+                        `<div class="game-image placeholder">No image available</div>`;
+
                     card.innerHTML = `
+                        ${imageHtml}
                         <h3>${game.name}</h3>
                         <p><strong>CHECKED OUT</strong></p>
                         <p>Player: ${game.checkedOutTo || 'N/A'}</p>
@@ -378,7 +454,6 @@
                 return false;
             }
         }
-
         function createGameCard(game) {
             const card = document.createElement('div');
             card.className = 'game-card';
@@ -394,9 +469,29 @@
                     warningMessage = `<p class="warning">⚠️ OVERDUE - Fine: $${game.cost}</p>`;
                 }
             }
-
+        
+            const imageHtml = game.imageUrl ? 
+                `<img src="${game.imageUrl}" alt="${game.name}" class="game-image" onerror="this.onerror=null; this.src='/api/placeholder/400/200'; this.alt='Image failed to load';">` :
+                `<div class="game-image placeholder">No image available</div>`;
+        
+            const isAdmin = verifyAdminSession();
+            
             card.innerHTML = `
-                <h3>${game.name}</h3>
+                ${imageHtml}
+                <div class="game-header">
+                    <h3>${game.name}</h3>
+                    ${isAdmin ? `
+                        <div class="image-url-section">
+                            <input type="text" id="imageUrl-${game.id}" 
+                                value="${game.imageUrl || ''}" 
+                                placeholder="Enter image URL"
+                                class="image-url-input">
+                            <button onclick="updateImageUrl(${game.id})" class="button image-url-button">
+                                Update Image
+                            </button>
+                        </div>
+                    ` : ''}
+                </div>
                 <p>Players: ${game.players}</p>
                 <p>Duration: ${game.duration}</p>
                 <p>Replacement Cost: $${game.cost}</p>
@@ -426,6 +521,32 @@
                 </div>
             `;
             return card;
+        }
+
+        async function updateImageUrl(gameId) {
+            if (!verifyAdminSession()) {
+                alert('Admin session expired. Please log in again.');
+                document.getElementById('adminPanel').classList.remove('visible');
+                return;
+            }
+
+            const imageUrlInput = document.getElementById(`imageUrl-${gameId}`);
+            const newUrl = imageUrlInput.value.trim();
+            
+            updateSyncStatus('Updating image URL...', true);
+            const success = await updateSheet({
+                action: 'updateImage',
+                gameId: gameId,
+                imageUrl: newUrl
+            });
+
+            if (success) {
+                updateSyncStatus('Image URL updated successfully', true);
+                await fetchGames();
+            } else {
+                updateSyncStatus('Failed to update image URL', false);
+                alert('Failed to update image URL. Please try again.');
+            }
         }
 
         async function checkoutGame(gameId) {
