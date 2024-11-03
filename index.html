@@ -128,7 +128,7 @@
 
     <script>
         const CONFIG = {
-            SCRIPT_URL: 'https://script.google.com/macros/s/AKfycby-yS6D3Fg4U8FV9_ljMObge5PNrTS4W9qHjJQ27CjkzavgK-KsKtYOZsXTgA-y2zBc/exec',
+            SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbwadLh2JRaJ_-vLiXyveNbCD3dB22jv3io4WLCHt2H2gfe4-vMvmGmzNpPPQ2P2qWIx/exec',
             ADMIN_PASSWORD: 'admin123',
             SYNC_INTERVAL: 60000 // 1 minute
         };
@@ -138,7 +138,13 @@
 
         async function fetchGames() {
             try {
-                const response = await fetch(CONFIG.SCRIPT_URL);
+                const response = await fetch(CONFIG.SCRIPT_URL + '?method=GET', {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+                
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 
                 const data = await response.json();
@@ -155,14 +161,18 @@
 
         async function updateSheet(data) {
             try {
-                const response = await fetch(CONFIG.SCRIPT_URL, {
+                const response = await fetch(CONFIG.SCRIPT_URL + '?method=POST', {
                     method: 'POST',
+                    mode: 'cors',
                     headers: {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify(data)
                 });
+
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 
+                // Wait for Google Sheet to update
                 await new Promise(resolve => setTimeout(resolve, 2000));
                 await fetchGames();
                 return true;
