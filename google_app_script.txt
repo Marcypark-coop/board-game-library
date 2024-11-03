@@ -16,9 +16,10 @@ function doGet(e) {
           cost: parseFloat(row[3]) || 0,
           available: row[4] === 'TRUE',
           checkedOutTo: row[5] || null,
-          building: row[6] || null,
-          apartment: row[7] || null,
-          dueDate: row[8] || null
+          email: row[6] || null,        // New email field
+          building: row[7] || null,      // Shifted from 6 to 7
+          apartment: row[8] || null,     // Shifted from 7 to 8
+          dueDate: row[9] || null        // Shifted from 8 to 9
         });
       }
     }
@@ -49,9 +50,10 @@ function doPost(e) {
       // Update the sheet for checkout
       sheet.getRange(row, 5).setValue('FALSE'); // Available
       sheet.getRange(row, 6).setValue(data.name); // CheckedOutTo
-      sheet.getRange(row, 7).setValue(data.building); // Building
-      sheet.getRange(row, 8).setValue(data.apartment); // Apartment
-      sheet.getRange(row, 9).setValue(data.dueDate); // DueDate
+      sheet.getRange(row, 7).setValue(data.email); // Email (new)
+      sheet.getRange(row, 8).setValue(data.building); // Building (shifted)
+      sheet.getRange(row, 9).setValue(data.apartment); // Apartment (shifted)
+      sheet.getRange(row, 10).setValue(data.dueDate); // DueDate (shifted)
       
       // Log the update
       Logger.log('Checkout processed for game ID: ' + data.gameId);
@@ -60,9 +62,10 @@ function doPost(e) {
       // Update the sheet for return
       sheet.getRange(row, 5).setValue('TRUE'); // Available
       sheet.getRange(row, 6).setValue(''); // CheckedOutTo
-      sheet.getRange(row, 7).setValue(''); // Building
-      sheet.getRange(row, 8).setValue(''); // Apartment
-      sheet.getRange(row, 9).setValue(''); // DueDate
+      sheet.getRange(row, 7).setValue(''); // Email
+      sheet.getRange(row, 8).setValue(''); // Building
+      sheet.getRange(row, 9).setValue(''); // Apartment
+      sheet.getRange(row, 10).setValue(''); // DueDate
       
       // Log the update
       Logger.log('Return processed for game ID: ' + data.gameId);
@@ -70,7 +73,7 @@ function doPost(e) {
 
     // Create timestamp in sheet for tracking
     var timestamp = new Date();
-    sheet.getRange(row, 10).setValue(timestamp); // Assuming column 10 is for timestamps
+    sheet.getRange(row, 11).setValue(timestamp); // Timestamp column shifted to 11
     
     return ContentService.createTextOutput(JSON.stringify({
       success: true,
@@ -103,9 +106,10 @@ function clearAllCheckouts() {
   for(var i = 2; i <= lastRow; i++) {
     sheet.getRange(i, 5).setValue('TRUE'); // Available
     sheet.getRange(i, 6).setValue(''); // CheckedOutTo
-    sheet.getRange(i, 7).setValue(''); // Building
-    sheet.getRange(i, 8).setValue(''); // Apartment
-    sheet.getRange(i, 9).setValue(''); // DueDate
+    sheet.getRange(i, 7).setValue(''); // Email
+    sheet.getRange(i, 8).setValue(''); // Building
+    sheet.getRange(i, 9).setValue(''); // Apartment
+    sheet.getRange(i, 10).setValue(''); // DueDate
   }
 }
 
@@ -131,15 +135,16 @@ function getOverdueGames() {
   // Skip header row
   for(var i = 1; i < data.length; i++) {
     var row = data[i];
-    if(row[8] && row[4] === 'FALSE') { // If there's a due date and game is checked out
-      var dueDate = new Date(row[8]);
+    if(row[9] && row[4] === 'FALSE') { // If there's a due date and game is checked out
+      var dueDate = new Date(row[9]);
       if(dueDate < today) {
         overdueGames.push({
           name: row[0],
           checkedOutTo: row[5],
-          building: row[6],
-          apartment: row[7],
-          dueDate: row[8]
+          email: row[6],
+          building: row[7],
+          apartment: row[8],
+          dueDate: row[9]
         });
       }
     }
@@ -156,12 +161,13 @@ function getCheckoutHistory() {
   // Skip header row
   for(var i = 1; i < data.length; i++) {
     var row = data[i];
-    if(row[9]) { // If there's a timestamp
+    if(row[10]) { // If there's a timestamp (now column 11)
       history.push({
         name: row[0],
         action: row[4] === 'TRUE' ? 'return' : 'checkout',
-        timestamp: row[9],
-        checkedOutTo: row[5] || 'N/A'
+        timestamp: row[10],
+        checkedOutTo: row[5] || 'N/A',
+        email: row[6] || 'N/A'
       });
     }
   }
